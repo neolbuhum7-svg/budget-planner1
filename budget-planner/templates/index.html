@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Budget Planner</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>💰 Budget Planner</h1>
+    <nav class="month-nav">
+      <a href="{{ url_for('index', month=prev_month) }}">&larr;</a>
+      <span>{{ month_label }}</span>
+      <a href="{{ url_for('index', month=next_month) }}">&rarr;</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <section class="cards">
+      <div class="card income"><h3>Income</h3><p>₹{{ '%.2f'|format(income) }}</p></div>
+      <div class="card expense"><h3>Expenses</h3><p>₹{{ '%.2f'|format(expense) }}</p></div>
+      <div class="card balance {{ 'negative' if balance < 0 }}"><h3>Balance</h3><p>₹{{ '%.2f'|format(balance) }}</p></div>
+    </section>
+
+    <section class="panel">
+      <h2>Monthly Budget</h2>
+      <form action="{{ url_for('set_budget') }}" method="post" class="inline-form">
+        <input type="hidden" name="month" value="{{ month }}">
+        <input type="number" name="amount" step="0.01" min="0" placeholder="Set budget (₹)" value="{{ budget or '' }}" required>
+        <button type="submit">Save</button>
+      </form>
+      {% if budget %}
+        <div class="progress"><div class="bar {{ 'over' if over_budget }}" style="width: {{ percent_used }}%"></div></div>
+        <p class="muted">
+          Spent ₹{{ '%.2f'|format(expense) }} of ₹{{ '%.2f'|format(budget) }}
+          {% if over_budget %}
+            — <strong class="danger">over budget by ₹{{ '%.2f'|format(-remaining) }}</strong>
+          {% else %}
+            — ₹{{ '%.2f'|format(remaining) }} left
+          {% endif %}
+        </p>
+      {% else %}
+        <p class="muted">No budget set for this month yet.</p>
+      {% endif %}
+    </section>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>Add Transaction</h2>
+        <form action="{{ url_for('add_transaction') }}" method="post" class="stack-form">
+          <select name="type" id="type" required>
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
+          <select name="category" id="category" required></select>
+          <input type="number" name="amount" step="0.01" min="0.01" placeholder="Amount (₹)" required>
+          <input type="text" name="description" placeholder="Description (optional)" maxlength="100">
+          <input type="date" name="date" value="{{ today }}" required>
+          <button type="submit">Add</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Spending by Category</h2>
+        {% if chart_labels %}
+          <canvas id="categoryChart"></canvas>
+        {% else %}
+          <p class="muted">No expenses recorded this month.</p>
+        {% endif %}
+      </section>
+    </div>
+
+    <section class="panel">
+      <h2>Transactions</h2>
+      {% if transactions %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Category</th><th>Description</th><th class="right">Amount</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for t in transactions %}
+            <tr>
+              <td>{{ t.date }}</td>
+              <td>{{ t.category }}</td>
+              <td>{{ t.description or '—' }}</td>
+              <td class="right {{ t.type }}">{{ '+' if t.type == 'income' else '-' }}₹{{ '%.2f'|format(t.amount) }}</td>
+              <td class="right">
+                <form action="{{ url_for('delete_transaction', tx_id=t.id) }}" method="post" onsubmit="return confirm('Delete this transaction?');">
+                  <input type="hidden" name="month" value="{{ month }}">
+                  <button class="link-btn" type="submit">Delete</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <p class="muted">No transactions for this month.</p>
+      {% endif %}
+    </section>
+  </main>
+
+  <script>
+    const categories = {
+      expense: {{ expense_categories|tojson }},
+      income: {{ income_categories|tojson }}
+    };
+    const typeSelect = document.getElementById("type");
+    const categorySelect = document.getElementById("category");
+
+    function fillCategories() {
+      categorySelect.innerHTML = categories[typeSelect.value]
+        .map(c => `<option value="${c}">${c}</option>`).join("");
+    }
+    typeSelect.addEventListener("change", fillCategories);
+    fillCategories();
+
+    {% if chart_labels %}
+    new Chart(document.getElementById("categoryChart"), {
+      type: "doughnut",
+      data: {
+        labels: {{ chart_labels|tojson }},
+        datasets: [{ data: {{ chart_values|tojson }} }]
+      },
+      options: { plugins: { legend: { position: "bottom" } } }
+    });
+    {% endif %}
+  </script>
+</body>
+</html>
