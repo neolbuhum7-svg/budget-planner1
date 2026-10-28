@@ -8,7 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DATABASE = BASE_DIR / "budget.db"
 
 app = Flask(__name__)
-app.secret_key = "change-this-secret-key"  # change before deploying anywhere public
+app.secret_key = os.environ.get("SECRET_KEY","dev-only-key")  # change before deploying anywhere public
 
 EXPENSE_CATEGORIES = [
     "Food", "Rent", "Transport", "Utilities", "Shopping",
@@ -175,7 +175,6 @@ def set_budget():
     flash("Monthly budget saved.", "success")
     return redirect(url_for("index", month=month))
 
-
+init_db()
 if __name__ == "__main__":
-    init_db()
-    app.run(debug=True)
+  app.run(debug=True)
